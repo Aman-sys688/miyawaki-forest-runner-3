@@ -1,0 +1,2709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Miyawaki Forest Runner: 30-Player Hyper-Afforestation Grand Prix</title>
+  
+  <!-- Modern Esports & Arcade Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Press+Start+2P&family=Space+Grotesk:wght@600;700;900&display=swap" rel="stylesheet">
+  
+  <!-- Phaser 3, PeerJS & Canvas Confetti CDNs -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+
+  <style>
+    :root {
+      --primary-neon-emerald: #10f09a;
+      --primary-green: #059669;
+      --cyber-cyan: #06b6d4;
+      --dark-green: #022c22;
+      --accent-gold: #fbbf24;
+      --danger-neon-red: #ff3366;
+      --danger-dark: #881337;
+      --bg-dark: #050d0a;
+      --card-bg: rgba(6, 22, 17, 0.92);
+      --glass-border: rgba(16, 240, 154, 0.4);
+      --text-main: #f0fdf4;
+      --text-muted: #a7f3d0;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+      font-family: 'Space Grotesk', 'Outfit', sans-serif;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+    }
+
+    #game-app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    #phaser-container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #phaser-container canvas {
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.9);
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    /* FLASH & HIT EFFECT */
+    .flash-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle, rgba(255, 51, 102, 0.6) 0%, rgba(136, 19, 55, 0.8) 100%);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.06s ease-out;
+      z-index: 50;
+    }
+
+    .flash-overlay.active {
+      opacity: 1;
+    }
+
+    /* LIVE EVENT TICKER / KILLFEED (TOP TICKER) */
+    .event-ticker {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(2, 20, 15, 0.88);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 4px 18px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #6ee7b7;
+      z-index: 40;
+      box-shadow: 0 0 15px rgba(16, 240, 154, 0.25);
+      white-space: nowrap;
+      pointer-events: none;
+      transition: all 0.3s;
+    }
+
+    /* TOP HUD LAYER */
+    .hud-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      padding: 12px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: none;
+      z-index: 30;
+      box-sizing: border-box;
+    }
+
+    .hud-left, .hud-right {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    .hud-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(14px);
+      border: 1.5px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 6px 12px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+    }
+
+    .player-badge {
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .hud-avatar {
+      font-size: 1.4rem;
+      background: rgba(16, 240, 154, 0.2);
+      border-radius: 50%;
+      padding: 4px;
+      box-shadow: 0 0 10px rgba(16, 240, 154, 0.4);
+    }
+
+    .hud-title {
+      font-weight: 900;
+      font-size: 0.9rem;
+      color: #fff;
+    }
+
+    .hud-subtitle {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .hud-label {
+      font-size: 0.6rem;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #6ee7b7;
+      text-transform: uppercase;
+    }
+
+    .hud-value {
+      font-size: 1.25rem;
+      font-weight: 900;
+      color: #fff;
+      font-family: 'Press Start 2P', monospace;
+      letter-spacing: -1px;
+    }
+
+    .score-card .hud-value {
+      color: var(--primary-neon-emerald);
+      text-shadow: 0 0 12px rgba(16, 240, 154, 0.7);
+    }
+
+    .rank-hud-badge {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #000;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 0.85rem;
+      font-weight: 900;
+      padding: 6px 10px;
+      border-radius: 8px;
+      box-shadow: 0 0 15px rgba(245, 158, 11, 0.6);
+    }
+
+    .speed-meter {
+      border-color: #06b6d4;
+    }
+
+    .speed-meter .hud-value {
+      color: #38bdf8;
+      text-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+    }
+
+    .combo-badge {
+      background: linear-gradient(135deg, #f59e0b, #ef4444);
+      color: #fff;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 0.75rem;
+      padding: 4px 8px;
+      border-radius: 8px;
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+      animation: pulse-combo 0.35s infinite alternate;
+    }
+
+    @keyframes pulse-combo {
+      from { transform: scale(1); }
+      to { transform: scale(1.15); }
+    }
+
+    /* 2-MINUTE TIMER HUD */
+    .hud-center {
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .timer-container {
+      background: rgba(4, 28, 22, 0.94);
+      border: 2px solid var(--primary-neon-emerald);
+      border-radius: 14px;
+      padding: 6px 20px;
+      text-align: center;
+      box-shadow: 0 0 30px rgba(16, 240, 154, 0.4);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 180px;
+    }
+
+    .timer-label {
+      font-size: 0.6rem;
+      font-weight: 900;
+      color: #a7f3d0;
+      letter-spacing: 1.5px;
+      margin-bottom: 2px;
+    }
+
+    .timer-clock {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 1.6rem;
+      color: #ffffff;
+      letter-spacing: 2px;
+      text-shadow: 0 0 12px rgba(16, 240, 154, 0.8);
+    }
+
+    .timer-clock.warning {
+      color: var(--danger-neon-red);
+      text-shadow: 0 0 20px rgba(255, 51, 102, 1);
+      animation: pulse-warn 0.4s infinite alternate;
+    }
+
+    @keyframes pulse-warn {
+      from { transform: scale(1); }
+      to { transform: scale(1.12); }
+    }
+
+    .timer-progress-bar {
+      width: 100%;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      margin-top: 4px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, #10f09a, #fbbf24, #ff3366);
+      transition: width 0.2s linear;
+    }
+
+    /* 30-PLAYER LIVE LEADERBOARD OVERLAY (TOP RIGHT) */
+    .leaderboard-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(14px);
+      border: 1.5px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 8px 12px;
+      width: 250px;
+      max-height: 280px;
+      box-shadow: 0 4px 25px rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .leaderboard-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.68rem;
+      font-weight: 900;
+      letter-spacing: 1px;
+      color: #a7f3d0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+      padding-bottom: 4px;
+      margin-bottom: 4px;
+    }
+
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
+      background: var(--primary-neon-emerald);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--primary-neon-emerald);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.7; }
+      50% { transform: scale(1.4); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.7; }
+    }
+
+    .player-count-tag {
+      margin-left: auto;
+      background: rgba(16, 240, 154, 0.2);
+      color: #6ee7b7;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.6rem;
+      font-weight: 800;
+    }
+
+    .leaderboard-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      overflow-y: auto;
+      max-height: 220px;
+    }
+
+    .leaderboard-list::-webkit-scrollbar {
+      width: 4px;
+    }
+    .leaderboard-list::-webkit-scrollbar-thumb {
+      background: rgba(16, 240, 154, 0.4);
+      border-radius: 2px;
+    }
+
+    .leaderboard-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .leaderboard-row.is-me {
+      background: rgba(16, 240, 154, 0.25);
+      border-left: 3px solid var(--primary-neon-emerald);
+      font-weight: 800;
+    }
+
+    .rank-badge {
+      font-weight: 900;
+      font-size: 0.68rem;
+      color: #fbbf24;
+      margin-right: 4px;
+      min-width: 22px;
+    }
+
+    .row-name {
+      color: #f0fdf4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100px;
+    }
+
+    .row-score {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 0.6rem;
+      color: var(--primary-neon-emerald);
+      margin-left: auto;
+    }
+
+    /* MODAL BACKDROPS (Lobby & Game Over) */
+    .modal-backdrop {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(2, 14, 10, 0.9);
+      backdrop-filter: blur(16px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    .lobby-card, .gameover-card {
+      background: linear-gradient(145deg, rgba(6, 32, 24, 0.97), rgba(2, 18, 14, 0.99));
+      border: 2px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 28px 34px;
+      max-width: 740px;
+      width: 100%;
+      max-height: 92vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85), 0 0 50px rgba(16, 240, 154, 0.25);
+      text-align: center;
+    }
+
+    .lobby-badge {
+      display: inline-block;
+      background: rgba(16, 240, 154, 0.18);
+      border: 1px solid rgba(16, 240, 154, 0.5);
+      color: #6ee7b7;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 900;
+      letter-spacing: 1.5px;
+      margin-bottom: 8px;
+    }
+
+    .game-title {
+      font-size: 2.6rem;
+      font-weight: 900;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, #a7f3d0, #10f09a, #059669);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 4px;
+    }
+
+    .game-tagline {
+      color: #a7f3d0;
+      font-size: 0.9rem;
+      margin-bottom: 20px;
+      opacity: 0.88;
+    }
+
+    /* INPUTS & BUTTONS */
+    .input-group {
+      margin-bottom: 16px;
+      text-align: left;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #a7f3d0;
+      margin-bottom: 4px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      background: rgba(2, 28, 20, 0.85);
+      border: 1.5px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+      outline: none;
+      transition: all 0.2s;
+      box-sizing: border-box;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--primary-neon-emerald);
+      box-shadow: 0 0 15px rgba(16, 240, 154, 0.4);
+    }
+
+    .lobby-action-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .action-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 16px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .action-box h3 {
+      font-size: 0.95rem;
+      font-weight: 900;
+      color: #f0fdf4;
+      margin-bottom: 4px;
+    }
+
+    .action-box p {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      margin-bottom: 12px;
+    }
+
+    .join-input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .code-input {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 1rem !important;
+      text-align: center;
+      letter-spacing: 3px;
+      padding: 8px !important;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      outline: none;
+      font-weight: 900;
+      border-radius: 12px;
+      padding: 12px 18px;
+      font-size: 0.9rem;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #10f09a, #059669);
+      color: #022c22;
+      box-shadow: 0 4px 18px rgba(16, 240, 154, 0.45);
+      width: 100%;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(16, 240, 154, 0.7);
+      filter: brightness(1.1);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.22);
+      transform: translateY(-2px);
+    }
+
+    .btn-tertiary {
+      background: linear-gradient(135deg, rgba(16, 240, 154, 0.25), rgba(6, 182, 212, 0.35));
+      color: #a7f3d0;
+      border: 1.5px solid var(--glass-border);
+      width: 100%;
+      padding: 14px;
+      font-size: 1rem;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-tertiary:hover {
+      background: rgba(16, 240, 154, 0.35);
+      transform: translateY(-2px);
+      box-shadow: 0 0 20px rgba(16, 240, 154, 0.4);
+    }
+
+    .btn-small {
+      padding: 6px 12px;
+      font-size: 0.75rem;
+    }
+
+    /* ROOM STATUS */
+    .room-status {
+      background: rgba(16, 240, 154, 0.1);
+      border: 1.5px dashed var(--primary-neon-emerald);
+      border-radius: 16px;
+      padding: 16px;
+      margin: 14px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .room-code-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.95rem;
+      color: #a7f3d0;
+    }
+
+    .room-code-badge strong {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 1.5rem;
+      color: #fbbf24;
+      letter-spacing: 4px;
+    }
+
+    .connected-players-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+      max-height: 80px;
+      overflow-y: auto;
+    }
+
+    .player-chip {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--glass-border);
+      padding: 3px 8px;
+      border-radius: 10px;
+      font-size: 0.75rem;
+      color: #e5e7eb;
+    }
+
+    /* HOW TO PLAY */
+    .how-to-play {
+      margin-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 14px;
+      text-align: left;
+    }
+
+    .how-to-play h4 {
+      font-size: 0.75rem;
+      font-weight: 900;
+      letter-spacing: 1px;
+      color: #a7f3d0;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+
+    .rules-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .rule-item {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      background: rgba(255, 255, 255, 0.02);
+      padding: 6px 8px;
+      border-radius: 8px;
+    }
+
+    .rule-icon {
+      font-size: 1.2rem;
+    }
+
+    .rule-item strong {
+      font-size: 0.8rem;
+      color: #fff;
+      display: block;
+    }
+
+    .rule-item p {
+      font-size: 0.7rem;
+      color: #9ca3af;
+      margin-top: 1px;
+      line-height: 1.25;
+    }
+
+    /* 30-PLAYER PODIUM & LEADERBOARD */
+    .stats-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .stat-box {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 10px 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .stat-num {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 1rem;
+      color: var(--primary-neon-emerald);
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 0.6rem;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .podium-table-wrapper {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      max-height: 250px;
+      overflow-y: auto;
+      margin-bottom: 16px;
+    }
+
+    .podium-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+    }
+
+    .podium-table th {
+      background: rgba(255, 255, 255, 0.06);
+      padding: 6px 10px;
+      text-align: left;
+      font-size: 0.65rem;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      position: sticky;
+      top: 0;
+    }
+
+    .podium-table td {
+      padding: 6px 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .podium-table tr.is-winner {
+      background: rgba(245, 158, 11, 0.15);
+      font-weight: 800;
+    }
+
+    .podium-table tr.is-user {
+      background: rgba(16, 240, 154, 0.22);
+      font-weight: 800;
+    }
+
+    .session-saved-notice {
+      background: rgba(2, 44, 34, 0.7);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      text-align: left;
+    }
+
+    .badge-lock {
+      background: var(--primary-neon-emerald);
+      color: #022c22;
+      font-weight: 900;
+      font-size: 0.65rem;
+      padding: 3px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+
+    .session-saved-notice p {
+      font-size: 0.75rem;
+      color: #d1fae5;
+    }
+
+    .gameover-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 768px) {
+      .hud-layer {
+        padding: 8px 10px;
+        flex-wrap: wrap;
+      }
+      .hud-left { order: 1; }
+      .hud-right { order: 2; }
+      .hud-center {
+        order: 3;
+        width: 100%;
+        margin-top: 4px;
+      }
+      .lobby-action-grid, .rules-grid {
+        grid-template-columns: 1fr;
+      }
+      .stats-summary-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="game-app">
+    <!-- LIVE EVENT TICKER -->
+    <div id="event-ticker" class="event-ticker">🌱 30 PLANTERS ON THE TRACK | RESTORE THE FOREST!</div>
+
+    <!-- TOP HUD OVERLAY -->
+    <div id="game-hud" class="hud-layer hidden">
+      <div class="hud-left">
+        <div class="hud-card player-badge">
+          <span class="hud-avatar">🌱</span>
+          <div class="hud-info">
+            <span id="hud-player-name" class="hud-title">EcoBlitz</span>
+            <span class="hud-subtitle">Miyawaki Grand Prix</span>
+          </div>
+        </div>
+        <div class="hud-card score-card">
+          <span class="hud-label">AFFORESTATION PTS</span>
+          <span id="hud-score-val" class="hud-value">0</span>
+        </div>
+        <div class="hud-card speed-meter">
+          <span class="hud-label">SPEED</span>
+          <span id="hud-speed-val" class="hud-value">520</span>
+        </div>
+        <div id="hud-rank-badge" class="rank-hud-badge">RANK #1/30</div>
+        <div id="hud-combo-badge" class="combo-badge hidden">3x COMBO!</div>
+      </div>
+
+      <!-- 2-MINUTE TIMER HUD -->
+      <div class="hud-center">
+        <div class="timer-container" id="timer-box">
+          <div class="timer-label">2-MIN GRAND PRIX TIMER</div>
+          <div class="timer-clock" id="timer-display">02:00</div>
+          <div class="timer-progress-bar">
+            <div id="timer-progress-fill" class="progress-fill"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 30-PLAYER LIVE LEADERBOARD OVERLAY (TOP RIGHT) -->
+      <div class="hud-right">
+        <div class="leaderboard-card">
+          <div class="leaderboard-header">
+            <span class="pulse-dot"></span>
+            <span>LIVE 30-PLAYER STANDINGS</span>
+            <span id="room-code-tag" class="player-count-tag">30 PLAYERS</span>
+          </div>
+          <ul id="live-leaderboard-list" class="leaderboard-list"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN PHASER GAME CONTAINER -->
+    <div id="phaser-container"></div>
+
+    <!-- FLASH OVERLAY -->
+    <div id="flash-overlay" class="flash-overlay"></div>
+
+    <!-- LOBBY OVERLAY -->
+    <div id="lobby-screen" class="modal-backdrop">
+      <div class="lobby-card">
+        <div class="lobby-badge">🏆 30-PLAYER AFFORESTATION GRAND PRIX</div>
+        <h1 class="game-title">FOREST RUNNER</h1>
+        <p class="game-tagline">Mass-multiplayer high-speed survival afforestation! Out-run 30 competitors & restore the forest canopy!</p>
+
+        <!-- Session Lock Notice -->
+        <div id="session-lock-banner" class="alert-banner hidden">
+          <span class="alert-icon">🔒</span>
+          <div class="alert-text">
+            <strong>Session Completed!</strong> Your 30-player tournament score is recorded.
+          </div>
+          <button id="btn-reset-session" class="btn-secondary btn-small">Reset Session (Demo Mode)</button>
+        </div>
+
+        <div id="lobby-controls-wrapper">
+          <div class="input-group">
+            <label for="player-name-input">PLANTER CODENAME</label>
+            <input type="text" id="player-name-input" maxlength="14" placeholder="Enter codename..." value="EcoGrandPrix">
+          </div>
+
+          <div class="lobby-action-grid">
+            <div class="action-box">
+              <h3>HOST ROOM (30 SLOTS)</h3>
+              <p>Host a 30-player grand prix room with a 4-letter code.</p>
+              <button id="btn-host-room" class="btn-primary">
+                <span class="btn-icon">⚡</span> Host 30-Player Match
+              </button>
+            </div>
+
+            <div class="action-box">
+              <h3>JOIN 30-PLAYER ROOM</h3>
+              <p>Enter 4-letter room code to join the tournament.</p>
+              <div class="join-input-row">
+                <input type="text" id="join-code-input" maxlength="4" placeholder="CODE" class="code-input" style="text-transform: uppercase;">
+                <button id="btn-join-room" class="btn-secondary">Join</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="solo-play-row">
+            <button id="btn-solo-play" class="btn-tertiary">
+              🌟 Quick Play: 30-Player Massive Marathon (vs 29 Competitive Rivals)
+            </button>
+          </div>
+
+          <!-- Room Status Display -->
+          <div id="room-status-area" class="room-status hidden">
+            <div class="room-code-badge">
+              <span>ROOM CODE:</span>
+              <strong id="display-room-code">----</strong>
+            </div>
+            <p id="room-status-msg">Waiting for competitors (Up to 30 players)...</p>
+            <div class="connected-players-list" id="lobby-player-list"></div>
+            <button id="btn-start-match" class="btn-primary btn-large">🚀 Launch 30-Player Match</button>
+          </div>
+        </div>
+
+        <!-- Gameplay Guide -->
+        <div class="how-to-play">
+          <h4>HARDCORE SURVIVAL MECHANICS</h4>
+          <div class="rules-grid">
+            <div class="rule-item">
+              <span class="rule-icon">🏃</span>
+              <div>
+                <strong>Hyper-Speed Run & Fast-Fall</strong>
+                <p>WASD / Arrows. Press <b>S / Down</b> to fast-fall! Speeds reach 850+ px/s.</p>
+              </div>
+            </div>
+            <div class="rule-item">
+              <span class="rule-icon">🌱</span>
+              <div>
+                <strong>Sapling Speed Combos (+10-40 pts)</strong>
+                <p>Collect in rapid succession to charge up to 4x multiplier!</p>
+              </div>
+            </div>
+            <div class="rule-item">
+              <span class="rule-icon">🌳</span>
+              <div>
+                <strong>Multi-Tier Canopies (+30-120 pts)</strong>
+                <p>Touch dry trees to bloom dense 4-tier Miyawaki canopies!</p>
+              </div>
+            </div>
+            <div class="rule-item">
+              <span class="rule-icon">🚜</span>
+              <div>
+                <strong>Bulldozers, Saws & Lasers (-100 pts)</strong>
+                <p>Heavy machinery, laser saw drones, toxic slime, and spike traps!</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FINAL 30-PLAYER LEADERBOARD MODAL -->
+    <div id="gameover-modal" class="modal-backdrop hidden">
+      <div class="gameover-card">
+        <div class="gameover-header">
+          <div class="timer-expired-badge">⏰ 2:00 TOURNAMENT CONCLUDED</div>
+          <h2 class="gameover-title">30-PLAYER GRAND PRIX FINAL</h2>
+          <p class="gameover-subtitle">Match finalized. All 30 planter scores have been ranked.</p>
+        </div>
+
+        <div class="stats-summary-grid">
+          <div class="stat-box">
+            <span class="stat-num" id="final-stat-score">0</span>
+            <span class="stat-label">Total Score</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-num" id="final-stat-dist">0m</span>
+            <span class="stat-label">Distance</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-num" id="final-stat-trees">0</span>
+            <span class="stat-label">Canopies</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-num" id="final-stat-rank" style="color: #fbbf24;">#1/30</span>
+            <span class="stat-label">Final Standing</span>
+          </div>
+        </div>
+
+        <div class="final-leaderboard-section">
+          <h3>🏆 30-PLAYER AFFORESTATION PODIUM</h3>
+          <div class="podium-table-wrapper">
+            <table class="podium-table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Competitor</th>
+                  <th>Distance</th>
+                  <th>Canopies</th>
+                  <th>Score</th>
+                  <th>Tier</th>
+                </tr>
+              </thead>
+              <tbody id="final-podium-rows"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="session-saved-notice">
+          <span class="badge-lock">🔒 TOURNAMENT SEALED</span>
+          <p>Your 30-player record is saved to LocalStorage for this match session.</p>
+        </div>
+
+        <div class="gameover-actions">
+          <button id="btn-unlock-replay" class="btn-primary">
+            🔄 Reset & Play Again
+          </button>
+          <button id="btn-return-lobby" class="btn-secondary">
+            🏠 Return to Lobby
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ALL-IN-ONE HYPER-ENGINE SCRIPT -->
+  <script>
+    /* =========================================================
+       1. GAME CONFIGURATION (HYPER-SPEED 30-PLAYER GRAND PRIX)
+       ========================================================= */
+    const GAME_CONFIG = {
+      CANVAS_WIDTH: 1200,
+      CANVAS_HEIGHT: 675,
+      WORLD_HEIGHT: 850,
+      
+      PLAYER: {
+        BASE_SPEED: 480,
+        MAX_SPEED: 860,
+        JUMP_VELOCITY: -620,
+        DOUBLE_JUMP_VELOCITY: -550,
+        FAST_FALL_VELOCITY: 650,
+        GRAVITY_Y: 1450,
+        DRAG_X: 1600,
+        MAX_FALL_SPEED: 1100,
+        COYOTE_TIME_MS: 140,
+        JUMP_BUFFER_MS: 170,
+        KNOCKBACK_FORCE_X: 520,
+        KNOCKBACK_FORCE_Y: -420,
+        INVULNERABLE_DURATION_MS: 1600,
+      },
+      
+      SCORING: {
+        SAPLING_POINTS: 10,
+        TREE_WATER_POINTS: 30,
+        BULLDOZER_PENALTY: 100,
+        SAW_PENALTY: 80,
+        TOXIC_PENALTY: 60,
+        MATCH_DURATION_SECONDS: 120, // 2-Minute Blitz
+        COMBO_TIMEOUT_MS: 2200,
+      },
+
+      TOTAL_COMPETITORS: 30,
+
+      STORAGE_KEYS: {
+        SESSION_LOCK: 'miyawaki_gp_30p_v3',
+        HIGH_SCORE: 'miyawaki_gp_high_score_v3',
+      }
+    };
+
+    /* =========================================================
+       2. PROCEDURAL SOUND SYNTHESIZER
+       ========================================================= */
+    class SoundController {
+      constructor() {
+        this.ctx = null;
+        try {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) this.ctx = new AudioCtx();
+        } catch (e) {}
+      }
+
+      ensureContext() {
+        if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+      }
+
+      playJump() {
+        if (!this.ctx) return;
+        this.ensureContext();
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const now = this.ctx.currentTime;
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(260, now);
+        osc.frequency.exponentialRampToValueAtTime(650, now + 0.11);
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.11);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.11);
+      }
+
+      playDoubleJump() {
+        if (!this.ctx) return;
+        this.ensureContext();
+        const osc = this.ctx.createOscillator();
+        const osc2 = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const now = this.ctx.currentTime;
+        osc.type = 'triangle';
+        osc2.type = 'sine';
+        osc.frequency.setValueAtTime(500, now);
+        osc.frequency.exponentialRampToValueAtTime(1050, now + 0.14);
+        osc2.frequency.setValueAtTime(750, now);
+        osc2.frequency.exponentialRampToValueAtTime(1350, now + 0.14);
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+        osc.connect(gain);
+        osc2.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc2.start(now);
+        osc.stop(now + 0.14);
+        osc2.stop(now + 0.14);
+      }
+
+      playSaplingCollect(combo = 1) {
+        if (!this.ctx) return;
+        this.ensureContext();
+        const pitchMult = Math.min(2.4, 1 + (combo - 1) * 0.22);
+        const notes = [659.25 * pitchMult, 830.61 * pitchMult, 987.77 * pitchMult, 1318.51 * pitchMult];
+        const now = this.ctx.currentTime;
+        notes.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          const startTime = now + idx * 0.025;
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, startTime);
+          gain.gain.setValueAtTime(0.18, startTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.12);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(startTime);
+          osc.stop(startTime + 0.13);
+        });
+      }
+
+      playWaterTree() {
+        if (!this.ctx) return;
+        this.ensureContext();
+        const chords = [440.00, 554.37, 659.25, 880.00, 1108.73];
+        const now = this.ctx.currentTime;
+        chords.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          const startTime = now + idx * 0.035;
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, startTime);
+          osc.frequency.exponentialRampToValueAtTime(freq * 1.25, startTime + 0.35);
+          gain.gain.setValueAtTime(0.24, startTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.4);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(startTime);
+          osc.stop(startTime + 0.41);
+        });
+      }
+
+      playHazardHit() {
+        if (!this.ctx) return;
+        this.ensureContext();
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(180, now);
+        osc.frequency.exponentialRampToValueAtTime(30, now + 0.3);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      }
+
+      playGameOver() {
+        if (!this.ctx) return;
+        this.ensureContext();
+        const notes = [{ f: 523.25, d: 0.12 }, { f: 659.25, d: 0.12 }, { f: 783.99, d: 0.12 }, { f: 1046.50, d: 0.4 }];
+        let timeOffset = this.ctx.currentTime;
+        notes.forEach(note => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(note.f, timeOffset);
+          gain.gain.setValueAtTime(0.2, timeOffset);
+          gain.gain.exponentialRampToValueAtTime(0.001, timeOffset + note.d);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(timeOffset);
+          osc.stop(timeOffset + note.d);
+          timeOffset += note.d * 0.9;
+        });
+      }
+    }
+
+    const soundCtrl = new SoundController();
+
+    /* =========================================================
+       3. HIGH-DEFINITION PROCEDURAL SPRITE GENERATOR
+       ========================================================= */
+    if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
+      CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+        if (typeof r === 'undefined') r = 0;
+        if (typeof r === 'number') r = [r, r, r, r];
+        const r0 = r[0] || 0, r1 = r[1] || 0, r2 = r[2] || 0, r3 = r[3] || 0;
+        this.beginPath();
+        this.moveTo(x + r0, y);
+        this.lineTo(x + w - r1, y);
+        this.quadraticCurveTo(x + w, y, x + w, y + r1);
+        this.lineTo(x + w, y + h - r2);
+        this.quadraticCurveTo(x + w, y + h, x + w - r2, y + h);
+        this.lineTo(x + r3, y + h);
+        this.quadraticCurveTo(x, y + h, x, y + h - r3);
+        this.lineTo(x, y + r0);
+        this.quadraticCurveTo(x, y, x + r0, y);
+        this.closePath();
+        return this;
+      };
+    }
+
+    class SpriteGenerator {
+      static createAllTextures(scene) {
+        this.createPlayerTextures(scene);
+        this.createSaplingTexture(scene);
+        this.createTreeTextures(scene);
+        this.createHazardTextures(scene);
+        this.createEnvironmentTextures(scene);
+        this.createParticleTextures(scene);
+      }
+
+      static createPlayerTextures(scene) {
+        const w = 52, h = 68;
+        const idleCanvas = document.createElement('canvas');
+        idleCanvas.width = w; idleCanvas.height = h;
+        this.drawCyberRunner(idleCanvas.getContext('2d'), w, h, 0, 'idle');
+        if (!scene.textures.exists('player_idle')) scene.textures.addCanvas('player_idle', idleCanvas);
+
+        for (let f = 0; f < 4; f++) {
+          const runCanvas = document.createElement('canvas');
+          runCanvas.width = w; runCanvas.height = h;
+          this.drawCyberRunner(runCanvas.getContext('2d'), w, h, f, 'run');
+          if (!scene.textures.exists(`player_run_${f}`)) scene.textures.addCanvas(`player_run_${f}`, runCanvas);
+        }
+
+        const jumpCanvas = document.createElement('canvas');
+        jumpCanvas.width = w; jumpCanvas.height = h;
+        this.drawCyberRunner(jumpCanvas.getContext('2d'), w, h, 0, 'jump');
+        if (!scene.textures.exists('player_jump')) scene.textures.addCanvas('player_jump', jumpCanvas);
+
+        // Competitor Ghost Sprites (Orange & Cyan Bandanas)
+        const ghostCanvas = document.createElement('canvas');
+        ghostCanvas.width = w; ghostCanvas.height = h;
+        this.drawCyberRunner(ghostCanvas.getContext('2d'), w, h, 0, 'ghost');
+        if (!scene.textures.exists('player_ghost')) scene.textures.addCanvas('player_ghost', ghostCanvas);
+      }
+
+      static drawCyberRunner(ctx, w, h, frame, state) {
+        ctx.clearRect(0, 0, w, h);
+        const cx = w / 2, isGhost = (state === 'ghost');
+
+        // Glowing Cyber Scarf / Particle Ribbon
+        ctx.fillStyle = isGhost ? '#f97316' : '#10f09a';
+        ctx.shadowColor = isGhost ? '#f97316' : '#10f09a';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.moveTo(cx - 6, 26);
+        ctx.lineTo(cx - 20 - (state === 'run' ? (frame % 2) * 6 : 0), 46);
+        ctx.lineTo(cx - 2, 36);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Legs / Cyber Boots
+        ctx.fillStyle = '#0f172a';
+        let legL = 44, legR = 44, fL = 0, fR = 0;
+        if (state === 'run') {
+          const offsets = [{ l: -8, r: 8 }, { l: -4, r: 4 }, { l: 8, r: -8 }, { l: 4, r: -4 }];
+          fL = offsets[frame].l; fR = offsets[frame].r;
+        } else if (state === 'jump') { fL = -5; fR = 5; }
+
+        // Left leg
+        ctx.fillRect(cx - 9 + fL, legL, 7, 18);
+        ctx.fillStyle = isGhost ? '#ea580c' : '#059669'; // Boost sole
+        ctx.fillRect(cx - 10 + fL, legL + 14, 9, 5);
+
+        // Right leg
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(cx + 2 + fR, legR, 7, 18);
+        ctx.fillStyle = isGhost ? '#c2410c' : '#047857';
+        ctx.fillRect(cx + 1 + fR, legR + 14, 9, 5);
+
+        // Armored Nano-Vest
+        ctx.fillStyle = isGhost ? '#1e293b' : '#064e3b';
+        ctx.beginPath();
+        ctx.roundRect(cx - 11, 24, 22, 22, 5);
+        ctx.fill();
+
+        // Neon Glow Trim on Chest
+        ctx.fillStyle = isGhost ? '#fb923c' : '#34d399';
+        ctx.fillRect(cx - 2, 28, 4, 12);
+
+        // Satchel with Native Seed Bio-Vials
+        ctx.strokeStyle = '#d97706';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(cx - 9, 24); ctx.lineTo(cx + 9, 44);
+        ctx.stroke();
+
+        ctx.fillStyle = '#38bdf8'; // Glowing seed capsule
+        ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.roundRect(cx + 6, 36, 6, 9, 3);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Head & Cyber Visor
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(cx, 16, 9, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Neon Visor Headband
+        ctx.fillStyle = isGhost ? '#ea580c' : '#022c22';
+        ctx.fillRect(cx - 10, 10, 20, 6);
+
+        ctx.fillStyle = isGhost ? '#38bdf8' : '#10f09a';
+        ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 6;
+        ctx.fillRect(cx + 1, 14, 8, 3); // Glowing Visor Eye
+        ctx.shadowBlur = 0;
+      }
+
+      static createSaplingTexture(scene) {
+        if (scene.textures.exists('sapling')) return;
+        const size = 40;
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const cx = size / 2, cy = size / 2;
+
+        // Pulsing Neon Aura
+        const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, 18);
+        grad.addColorStop(0, 'rgba(16, 240, 154, 0.95)');
+        grad.addColorStop(0.5, 'rgba(5, 150, 105, 0.5)');
+        grad.addColorStop(1, 'rgba(16, 240, 154, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 18, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Rich Soil Bulb
+        ctx.fillStyle = '#451a03';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 11, 11, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Vibrant Sprout Stem
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy + 11);
+        ctx.quadraticCurveTo(cx - 2, cy, cx, cy - 8);
+        ctx.stroke();
+
+        // Twin Radiant Leaves
+        ctx.fillStyle = '#4ade80';
+        ctx.beginPath();
+        ctx.ellipse(cx - 7, cy - 4, 7, 4, -Math.PI / 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#10f09a';
+        ctx.beginPath();
+        ctx.ellipse(cx + 7, cy - 6, 8, 4.5, Math.PI / 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Glowing Dew Core
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(cx + 8, cy - 8, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        scene.textures.addCanvas('sapling', canvas);
+      }
+
+      static createTreeTextures(scene) {
+        if (!scene.textures.exists('tree_dry')) {
+          const dryW = 70, dryH = 85;
+          const dryCanvas = document.createElement('canvas');
+          dryCanvas.width = dryW; dryCanvas.height = dryH;
+          const dCtx = dryCanvas.getContext('2d');
+
+          // Dry Cracked Soil
+          dCtx.fillStyle = '#78350f';
+          dCtx.beginPath();
+          dCtx.ellipse(dryW / 2, dryH - 12, 28, 9, 0, 0, Math.PI * 2);
+          dCtx.fill();
+
+          dCtx.strokeStyle = '#451a03';
+          dCtx.lineWidth = 4.5;
+          dCtx.beginPath();
+          dCtx.moveTo(dryW / 2, dryH - 12);
+          dCtx.quadraticCurveTo(dryW / 2 + 6, dryH - 38, dryW / 2 - 3, dryH - 60);
+          dCtx.stroke();
+
+          // Water Required Indicator
+          dCtx.fillStyle = '#f59e0b';
+          dCtx.beginPath();
+          dCtx.arc(dryW / 2, dryH - 70, 10, 0, Math.PI * 2);
+          dCtx.fill();
+          dCtx.fillStyle = '#000';
+          dCtx.font = 'bold 12px sans-serif';
+          dCtx.textAlign = 'center';
+          dCtx.textBaseline = 'middle';
+          dCtx.fillText('💧', dryW / 2, dryH - 69);
+
+          scene.textures.addCanvas('tree_dry', dryCanvas);
+        }
+
+        if (!scene.textures.exists('tree_bloomed')) {
+          // LUSH 4-TIER MIYAWAKI CANOPY
+          const bloomW = 180, bloomH = 200;
+          const bloomCanvas = document.createElement('canvas');
+          bloomCanvas.width = bloomW; bloomCanvas.height = bloomH;
+          const bCtx = bloomCanvas.getContext('2d');
+          const bcx = bloomW / 2, groundY = bloomH - 18;
+
+          // Soil & Humus Base
+          bCtx.fillStyle = '#261204';
+          bCtx.beginPath();
+          bCtx.ellipse(bcx, groundY, 75, 16, 0, 0, Math.PI * 2);
+          bCtx.fill();
+
+          bCtx.fillStyle = '#10f09a';
+          bCtx.beginPath();
+          bCtx.ellipse(bcx, groundY - 3, 68, 9, 0, 0, Math.PI * 2);
+          bCtx.fill();
+
+          // Multi-Trunks
+          bCtx.fillStyle = '#78350f';
+          bCtx.beginPath();
+          bCtx.moveTo(bcx - 12, groundY);
+          bCtx.quadraticCurveTo(bcx - 6, groundY - 65, bcx - 8, groundY - 120);
+          bCtx.lineTo(bcx + 8, groundY - 120);
+          bCtx.quadraticCurveTo(bcx + 6, groundY - 65, bcx + 12, groundY);
+          bCtx.fill();
+
+          // Tier 1: Emergent & Canopy (Deep Lush Green)
+          bCtx.fillStyle = '#022c22';
+          bCtx.beginPath();
+          bCtx.arc(bcx, groundY - 135, 42, 0, Math.PI * 2);
+          bCtx.arc(bcx - 34, groundY - 118, 30, 0, Math.PI * 2);
+          bCtx.arc(bcx + 34, groundY - 118, 30, 0, Math.PI * 2);
+          bCtx.fill();
+
+          bCtx.fillStyle = '#047857';
+          bCtx.beginPath();
+          bCtx.arc(bcx - 14, groundY - 140, 34, 0, Math.PI * 2);
+          bCtx.arc(bcx + 18, groundY - 136, 32, 0, Math.PI * 2);
+          bCtx.fill();
+
+          bCtx.fillStyle = '#10b981';
+          bCtx.beginPath();
+          bCtx.arc(bcx - 6, groundY - 148, 24, 0, Math.PI * 2);
+          bCtx.arc(bcx + 14, groundY - 145, 22, 0, Math.PI * 2);
+          bCtx.fill();
+
+          // Tier 2: Sub-Tree Layer
+          bCtx.fillStyle = '#059669';
+          bCtx.beginPath();
+          bCtx.arc(bcx - 48, groundY - 80, 30, 0, Math.PI * 2);
+          bCtx.arc(bcx + 50, groundY - 85, 32, 0, Math.PI * 2);
+          bCtx.fill();
+
+          bCtx.fillStyle = '#34d399';
+          bCtx.beginPath();
+          bCtx.arc(bcx - 50, groundY - 85, 20, 0, Math.PI * 2);
+          bCtx.arc(bcx + 48, groundY - 90, 22, 0, Math.PI * 2);
+          bCtx.fill();
+
+          // Tier 3: Shrub Layer
+          bCtx.fillStyle = '#15803d';
+          bCtx.beginPath();
+          bCtx.arc(bcx - 34, groundY - 34, 25, 0, Math.PI * 2);
+          bCtx.arc(bcx + 34, groundY - 34, 25, 0, Math.PI * 2);
+          bCtx.arc(bcx, groundY - 42, 28, 0, Math.PI * 2);
+          bCtx.fill();
+
+          bCtx.fillStyle = '#4ade80';
+          bCtx.beginPath();
+          bCtx.arc(bcx - 30, groundY - 40, 17, 0, Math.PI * 2);
+          bCtx.arc(bcx + 30, groundY - 40, 17, 0, Math.PI * 2);
+          bCtx.arc(bcx, groundY - 48, 20, 0, Math.PI * 2);
+          bCtx.fill();
+
+          // Wildflowers & Bio-Berries
+          const flowers = ['#f43f5e', '#fbbf24', '#c084fc', '#38bdf8', '#ff3366'];
+          const pts = [{ x: bcx - 44, y: groundY - 16 }, { x: bcx - 22, y: groundY - 25 }, { x: bcx + 20, y: groundY - 28 }, { x: bcx + 42, y: groundY - 18 }, { x: bcx - 8, y: groundY - 70 }, { x: bcx + 16, y: groundY - 90 }];
+          pts.forEach((pt, i) => {
+            bCtx.fillStyle = flowers[i % flowers.length];
+            bCtx.beginPath();
+            bCtx.arc(pt.x, pt.y, 4.5, 0, Math.PI * 2);
+            bCtx.fill();
+          });
+
+          scene.textures.addCanvas('tree_bloomed', bloomCanvas);
+        }
+      }
+
+      static createHazardTextures(scene) {
+        // 1. Armored Deforestation Bulldozer
+        if (!scene.textures.exists('bulldozer')) {
+          const w = 120, h = 76;
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+
+          // Heavy Treads
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.roundRect(14, 48, 86, 24, 12);
+          ctx.fill();
+
+          ctx.fillStyle = '#334155';
+          for (let x = 24; x <= 90; x += 16) {
+            ctx.beginPath();
+            ctx.arc(x, 60, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#64748b';
+            ctx.beginPath();
+            ctx.arc(x, 60, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#334155';
+          }
+
+          // Armored Body (Cyber Yellow / Caution Stripes)
+          ctx.fillStyle = '#eab308';
+          ctx.beginPath();
+          ctx.roundRect(24, 24, 60, 26, 4);
+          ctx.fill();
+
+          ctx.fillStyle = '#0f172a';
+          for (let sx = 28; sx < 78; sx += 12) {
+            ctx.beginPath();
+            ctx.moveTo(sx, 50); ctx.lineTo(sx + 6, 50); ctx.lineTo(sx + 12, 36); ctx.lineTo(sx + 6, 36);
+            ctx.fill();
+          }
+
+          // Cab & Laser Sight
+          ctx.fillStyle = '#ca8a04';
+          ctx.beginPath();
+          ctx.roundRect(26, 6, 28, 22, 4);
+          ctx.fill();
+
+          ctx.fillStyle = '#ff3366'; // Red Alert Cab Window
+          ctx.shadowColor = '#ff3366'; ctx.shadowBlur = 8;
+          ctx.fillRect(30, 9, 20, 14);
+          ctx.shadowBlur = 0;
+
+          // Smokestack
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(52, 2, 7, 24);
+
+          // Heavy Front Steel Grinder Shield
+          ctx.fillStyle = '#475569';
+          ctx.beginPath();
+          ctx.moveTo(100, 16);
+          ctx.quadraticCurveTo(118, 44, 100, 72);
+          ctx.lineTo(90, 72);
+          ctx.quadraticCurveTo(108, 44, 90, 16);
+          ctx.fill();
+
+          scene.textures.addCanvas('bulldozer', canvas);
+        }
+
+        // 2. Laser Buzzsaw Drone
+        if (!scene.textures.exists('saw_blade')) {
+          const size = 56;
+          const sCanvas = document.createElement('canvas');
+          sCanvas.width = size; sCanvas.height = size;
+          const sCtx = sCanvas.getContext('2d');
+          const scx = size / 2, scy = size / 2;
+
+          sCtx.fillStyle = '#64748b';
+          sCtx.beginPath();
+          sCtx.arc(scx, scy, 24, 0, Math.PI * 2);
+          sCtx.fill();
+
+          sCtx.fillStyle = '#ff3366';
+          sCtx.shadowColor = '#ff3366'; sCtx.shadowBlur = 10;
+          for (let i = 0; i < 8; i++) {
+            const angle = (i * Math.PI) / 4;
+            sCtx.beginPath();
+            sCtx.moveTo(scx + Math.cos(angle) * 18, scy + Math.sin(angle) * 18);
+            sCtx.lineTo(scx + Math.cos(angle + 0.3) * 28, scy + Math.sin(angle + 0.3) * 28);
+            sCtx.lineTo(scx + Math.cos(angle + 0.6) * 18, scy + Math.sin(angle + 0.6) * 18);
+            sCtx.fill();
+          }
+          sCtx.shadowBlur = 0;
+
+          sCtx.fillStyle = '#0f172a';
+          sCtx.beginPath();
+          sCtx.arc(scx, scy, 8, 0, Math.PI * 2);
+          sCtx.fill();
+
+          scene.textures.addCanvas('saw_blade', sCanvas);
+        }
+
+        // 3. Toxic Sludge Barrel
+        if (!scene.textures.exists('toxic_barrel')) {
+          const bCanvas = document.createElement('canvas');
+          bCanvas.width = 44; bCanvas.height = 58;
+          const bCtx = bCanvas.getContext('2d');
+
+          bCtx.fillStyle = '#65a30d';
+          bCtx.beginPath();
+          bCtx.roundRect(4, 4, 36, 50, 6);
+          bCtx.fill();
+
+          bCtx.fillStyle = '#84cc16';
+          bCtx.shadowColor = '#84cc16'; bCtx.shadowBlur = 8;
+          bCtx.fillRect(8, 8, 28, 6);
+          bCtx.shadowBlur = 0;
+
+          bCtx.fillStyle = '#0f172a';
+          bCtx.font = 'bold 18px sans-serif';
+          bCtx.textAlign = 'center';
+          bCtx.fillText('☣', 22, 36);
+
+          scene.textures.addCanvas('toxic_barrel', bCanvas);
+        }
+      }
+
+      static createEnvironmentTextures(scene) {
+        // High-Quality Grassy Ground Tile
+        if (!scene.textures.exists('tile_ground')) {
+          const gCanvas = document.createElement('canvas');
+          gCanvas.width = 64; gCanvas.height = 64;
+          const gCtx = gCanvas.getContext('2d');
+
+          gCtx.fillStyle = '#261204';
+          gCtx.fillRect(0, 0, 64, 64);
+          gCtx.fillStyle = '#064e3b';
+          gCtx.fillRect(0, 0, 64, 16);
+          gCtx.fillStyle = '#10f09a';
+          gCtx.fillRect(0, 0, 64, 6);
+
+          for (let gx = 0; gx < 64; gx += 8) {
+            gCtx.beginPath();
+            gCtx.moveTo(gx, 16); gCtx.lineTo(gx + 4, 22); gCtx.lineTo(gx + 8, 16);
+            gCtx.fill();
+          }
+          scene.textures.addCanvas('tile_ground', gCanvas);
+        }
+
+        // Floating Cyber-Forest Platform
+        if (!scene.textures.exists('tile_platform')) {
+          const pCanvas = document.createElement('canvas');
+          pCanvas.width = 192; pCanvas.height = 42;
+          const pCtx = pCanvas.getContext('2d');
+
+          pCtx.fillStyle = '#261204';
+          pCtx.beginPath();
+          pCtx.roundRect(0, 0, 192, 38, [10, 10, 16, 16]);
+          pCtx.fill();
+
+          pCtx.fillStyle = '#047857';
+          pCtx.beginPath();
+          pCtx.roundRect(0, 0, 192, 14, [10, 10, 0, 0]);
+          pCtx.fill();
+
+          pCtx.fillStyle = '#10f09a';
+          pCtx.fillRect(0, 0, 192, 5);
+
+          scene.textures.addCanvas('tile_platform', pCanvas);
+        }
+
+        // Parallax Mountains with Sunrays
+        if (!scene.textures.exists('bg_mountains')) {
+          const mCanvas = document.createElement('canvas');
+          mCanvas.width = 1200; mCanvas.height = 400;
+          const mCtx = mCanvas.getContext('2d');
+          mCtx.fillStyle = '#032018';
+          mCtx.beginPath();
+          mCtx.moveTo(0, 400); mCtx.lineTo(0, 200); mCtx.lineTo(240, 90); mCtx.lineTo(520, 250); mCtx.lineTo(820, 70); mCtx.lineTo(1200, 190); mCtx.lineTo(1200, 400);
+          mCtx.fill();
+          scene.textures.addCanvas('bg_mountains', mCanvas);
+        }
+
+        if (!scene.textures.exists('bg_forest_silhouettes')) {
+          const fCanvas = document.createElement('canvas');
+          fCanvas.width = 1200; fCanvas.height = 300;
+          const fCtx = fCanvas.getContext('2d');
+          fCtx.fillStyle = '#063628';
+          for (let fx = 0; fx < 1200; fx += 50) {
+            const treeH = 150 + Math.sin(fx) * 55;
+            fCtx.beginPath();
+            fCtx.arc(fx + 25, 300 - treeH, 38, 0, Math.PI * 2);
+            fCtx.fill();
+          }
+          scene.textures.addCanvas('bg_forest_silhouettes', fCanvas);
+        }
+
+        if (!scene.textures.exists('cloud')) {
+          const cCanvas = document.createElement('canvas');
+          cCanvas.width = 130; cCanvas.height = 55;
+          const cCtx = cCanvas.getContext('2d');
+          cCtx.fillStyle = 'rgba(240, 253, 244, 0.4)';
+          cCtx.beginPath();
+          cCtx.arc(35, 32, 22, 0, Math.PI * 2);
+          cCtx.arc(65, 24, 26, 0, Math.PI * 2);
+          cCtx.arc(95, 32, 20, 0, Math.PI * 2);
+          cCtx.fill();
+          scene.textures.addCanvas('cloud', cCanvas);
+        }
+      }
+
+      static createParticleTextures(scene) {
+        if (!scene.textures.exists('particle_leaf')) {
+          const lCanvas = document.createElement('canvas');
+          lCanvas.width = 18; lCanvas.height = 18;
+          const lCtx = lCanvas.getContext('2d');
+          lCtx.fillStyle = '#10f09a';
+          lCtx.beginPath();
+          lCtx.ellipse(9, 9, 8, 4, Math.PI / 4, 0, Math.PI * 2);
+          lCtx.fill();
+          scene.textures.addCanvas('particle_leaf', lCanvas);
+        }
+
+        if (!scene.textures.exists('particle_water')) {
+          const wCanvas = document.createElement('canvas');
+          wCanvas.width = 14; wCanvas.height = 14;
+          const wCtx = wCanvas.getContext('2d');
+          wCtx.fillStyle = '#38bdf8';
+          wCtx.beginPath();
+          wCtx.arc(7, 7, 5, 0, Math.PI * 2);
+          wCtx.fill();
+          scene.textures.addCanvas('particle_water', wCanvas);
+        }
+
+        if (!scene.textures.exists('particle_smoke')) {
+          const sCanvas = document.createElement('canvas');
+          sCanvas.width = 18; sCanvas.height = 18;
+          const sCtx = sCanvas.getContext('2d');
+          sCtx.fillStyle = 'rgba(100, 116, 139, 0.85)';
+          sCtx.beginPath();
+          sCtx.arc(9, 9, 7, 0, Math.PI * 2);
+          sCtx.fill();
+          scene.textures.addCanvas('particle_smoke', sCanvas);
+        }
+
+        if (!scene.textures.exists('particle_sparkle')) {
+          const spCanvas = document.createElement('canvas');
+          spCanvas.width = 16; spCanvas.height = 16;
+          const spCtx = spCanvas.getContext('2d');
+          spCtx.fillStyle = '#fbbf24';
+          spCtx.beginPath();
+          spCtx.arc(8, 8, 6, 0, Math.PI * 2);
+          spCtx.fill();
+          scene.textures.addCanvas('particle_sparkle', spCanvas);
+        }
+      }
+    }
+
+    /* =========================================================
+       4. 30-PLAYER TOURNAMENT NETWORKING & SIMULATION
+       ========================================================= */
+    if (typeof Peer === 'undefined') {
+      window.Peer = class MockPeer {
+        constructor(id) {
+          this.id = id || 'mock-gp-' + Math.floor(Math.random() * 1000);
+          setTimeout(() => { if (this._onOpen) this._onOpen(this.id); }, 50);
+        }
+        on(event, cb) {
+          if (event === 'open') this._onOpen = cb;
+          if (event === 'connection') this._onConn = cb;
+          if (event === 'error') this._onError = cb;
+        }
+        connect() {
+          return { open: true, on: (ev, cb) => { if (ev === 'open') setTimeout(cb, 50); }, send: () => {} };
+        }
+        destroy() {}
+      };
+    }
+
+    class NetworkManager {
+      constructor() {
+        this.peer = null;
+        this.isHost = false;
+        this.roomCode = null;
+        this.connections = new Map();
+        this.players = new Map();
+        this.myId = null;
+        this.myName = 'EcoBlitz';
+        this.isSolo = false;
+        this.simulatedBots = [];
+        this.onStateChangeCallbacks = [];
+        this.onGameStartCallback = null;
+        this.PEER_PREFIX = 'mfr-gp30-v3-';
+      }
+
+      generate4LetterCode() {
+        const words = ['APEX', 'BLTZ', 'SEED', 'LEAF', 'OAKS', 'ROOT', 'TREE', 'PINE', 'FERN', 'GROW', 'FAST', 'RAIN', 'WILD', 'WOOD', 'MOSS', 'FLOR'];
+        return words[Math.floor(Math.random() * words.length)];
+      }
+
+      hostRoom(playerName, onReady) {
+        this.isHost = true;
+        this.isSolo = false;
+        this.myName = playerName || 'HostBlitz';
+        this.roomCode = this.generate4LetterCode();
+
+        const fullPeerId = `${this.PEER_PREFIX}${this.roomCode}`;
+        if (this.peer) { try { this.peer.destroy(); } catch (e) {} }
+
+        try {
+          this.peer = new Peer(fullPeerId, { debug: 1 });
+          this.peer.on('open', (id) => {
+            this.myId = id;
+            this.players.clear();
+            this.addPlayer(id, this.myName, true, true);
+            if (onReady) onReady(this.roomCode);
+          });
+          this.peer.on('connection', (conn) => this.setupConnection(conn));
+          this.peer.on('error', () => {
+            this.roomCode = this.generate4LetterCode();
+            this.hostRoom(playerName, onReady);
+          });
+        } catch (e) {
+          this.myId = 'host_local';
+          this.players.clear();
+          this.addPlayer(this.myId, this.myName, true, true);
+          if (onReady) onReady(this.roomCode);
+        }
+      }
+
+      joinRoom(code, playerName, onSuccess, onError) {
+        this.isHost = false;
+        this.isSolo = false;
+        this.roomCode = code.toUpperCase().trim();
+        this.myName = playerName || 'GuestBlitz';
+
+        const targetPeerId = `${this.PEER_PREFIX}${this.roomCode}`;
+        if (this.peer) { try { this.peer.destroy(); } catch (e) {} }
+
+        try {
+          this.peer = new Peer({ debug: 1 });
+          this.peer.on('open', (id) => {
+            this.myId = id;
+            this.players.clear();
+            this.addPlayer(id, this.myName, true, false);
+            const conn = this.peer.connect(targetPeerId, { reliable: true, metadata: { name: this.myName } });
+            this.setupConnection(conn);
+            conn.on('open', () => {
+              if (onSuccess) onSuccess(this.roomCode);
+              conn.send({ type: 'PLAYER_JOIN', id: this.myId, name: this.myName });
+            });
+          });
+          this.peer.on('error', (err) => { if (onError) onError(err); });
+        } catch (e) {
+          if (onError) onError(e);
+        }
+      }
+
+      startSolo(playerName) {
+        this.isSolo = true;
+        this.isHost = true;
+        this.roomCode = 'SOLO-30P';
+        this.myName = playerName || 'EcoBlitz';
+        this.myId = 'player_local';
+        this.players.clear();
+        this.addPlayer(this.myId, this.myName, true, true);
+
+        // Generate 29 Competitive Tournament Rivals for a Full 30-Player Roster!
+        const botNames = [
+          '⚡ HyperSprout', '🌪️ CanopyKing', '🌲 FloraVelocity', '🌱 ApexPlanter', '🍃 ZephyrRanger',
+          '🌿 TerraVanguard', '🌸 BlossomStorm', '🌴 AmazonianPrime', '🍂 RootMaster', '🌧️ RainDancer',
+          '🔥 PyroGreen', '⚡ TurboSeed', '👑 MiyawakiOverlord', '🌳 RedwoodTitan', '🌾 EcoPhantom',
+          '🌵 DesertBloom', '💚 BioHazardHunter', '✨ GaiaRunner', '🚀 SeedRocket', '🛡️ ForestShield',
+          '🏆 FloraChampion', '🌀 VerdantWhirl', '🏃 SproutSprinter', '🍁 TimberSurfer', '💧 AquaFlora',
+          '🌱 LeafProwler', '🌲 CedarClimber', '🌿 FernFighter', '⚡ NitroCanopy'
+        ];
+
+        this.simulatedBots = [];
+        botNames.forEach((bName, idx) => {
+          const botId = `bot_${idx + 1}`;
+          const botObj = {
+            id: botId,
+            name: bName,
+            score: 0,
+            distance: 0,
+            treesBloomed: 0,
+            rate: 0.85 + Math.random() * 0.75, // Varied skill levels
+            x: 100 + Math.random() * 500,
+            y: 300
+          };
+          this.simulatedBots.push(botObj);
+          this.players.set(botId, {
+            ...botObj,
+            isMe: false,
+            isHost: false,
+            isBot: true,
+            anim: 'run',
+            flipX: false
+          });
+        });
+
+        this.notifyState();
+      }
+
+      setupConnection(conn) {
+        this.connections.set(conn.peer, conn);
+        conn.on('data', (data) => this.handleIncomingData(conn, data));
+        conn.on('close', () => {
+          this.connections.delete(conn.peer);
+          this.players.delete(conn.peer);
+          this.notifyState();
+        });
+      }
+
+      handleIncomingData(conn, data) {
+        if (!data || !data.type) return;
+        switch (data.type) {
+          case 'PLAYER_JOIN':
+            this.addPlayer(data.id, data.name, false, false);
+            if (this.isHost) this.broadcast({ type: 'ROSTER_SYNC', players: Array.from(this.players.values()) });
+            break;
+          case 'ROSTER_SYNC':
+            if (Array.isArray(data.players)) {
+              data.players.forEach(p => {
+                if (p.id !== this.myId) this.players.set(p.id, { ...p, isMe: false });
+              });
+              this.notifyState();
+            }
+            break;
+          case 'START_MATCH':
+            if (this.onGameStartCallback) this.onGameStartCallback();
+            break;
+          case 'PLAYER_STATE':
+            const existing = this.players.get(data.id);
+            if (existing) {
+              existing.x = data.x; existing.y = data.y; existing.score = data.score;
+              existing.distance = data.distance; existing.treesBloomed = data.treesBloomed;
+              existing.anim = data.anim; existing.flipX = data.flipX;
+            }
+            this.notifyState();
+            break;
+        }
+      }
+
+      broadcast(data, excludePeerId = null) {
+        this.connections.forEach((conn, peerId) => {
+          if (peerId !== excludePeerId && conn.open) {
+            try { conn.send(data); } catch (e) {}
+          }
+        });
+      }
+
+      addPlayer(id, name, isMe, isHost) {
+        this.players.set(id, {
+          id, name, score: 0, distance: 0, treesBloomed: 0,
+          x: 100, y: 300, anim: 'idle', flipX: false, isMe, isHost
+        });
+        this.notifyState();
+      }
+
+      updateLocalScore(score, distance, treesBloomed, x, y, anim, flipX) {
+        const me = this.players.get(this.myId);
+        if (me) {
+          me.score = score; me.distance = distance; me.treesBloomed = treesBloomed;
+          me.x = x; me.y = y; me.anim = anim; me.flipX = flipX;
+          this.broadcast({ type: 'PLAYER_STATE', id: this.myId, score, distance, treesBloomed, x, y, anim, flipX });
+          this.notifyState();
+        }
+      }
+
+      updateSimulatedBots(deltaSec) {
+        if (!this.isSolo || !this.simulatedBots.length) return;
+        this.simulatedBots.forEach(bot => {
+          bot.distance += Math.round(55 * bot.rate * deltaSec * 3);
+          bot.x += bot.rate * 450 * deltaSec;
+
+          if (Math.random() < 0.18 * bot.rate) bot.score += 20;
+          if (Math.random() < 0.05 * bot.rate) { bot.score += 70; bot.treesBloomed += 1; }
+
+          const playerObj = this.players.get(bot.id);
+          if (playerObj) {
+            playerObj.score = bot.score; playerObj.distance = bot.distance;
+            playerObj.treesBloomed = bot.treesBloomed; playerObj.x = bot.x;
+          }
+        });
+        this.notifyState();
+      }
+
+      getRankedPlayers() {
+        return Array.from(this.players.values()).sort((a, b) => b.score - a.score);
+      }
+
+      notifyState() {
+        const ranked = this.getRankedPlayers();
+        this.onStateChangeCallbacks.forEach(cb => { try { cb(ranked); } catch (e) {} });
+      }
+
+      onStateChange(cb) { this.onStateChangeCallbacks.push(cb); }
+    }
+
+    const networkManager = new NetworkManager();
+
+    /* =========================================================
+       5. PHASER 3 HYPER-SPEED PROCEDURAL INFINITE PLATFORMER
+       ========================================================= */
+    class BootScene extends Phaser.Scene {
+      constructor() { super({ key: 'BootScene' }); }
+      preload() { SpriteGenerator.createAllTextures(this); }
+      create() {
+        if (!this.anims.exists('player_idle_anim')) {
+          this.anims.create({ key: 'player_idle_anim', frames: [{ key: 'player_idle' }], frameRate: 1, repeat: -1 });
+        }
+        if (!this.anims.exists('player_run_anim')) {
+          this.anims.create({
+            key: 'player_run_anim',
+            frames: [{ key: 'player_run_0' }, { key: 'player_run_1' }, { key: 'player_run_2' }, { key: 'player_run_3' }],
+            frameRate: 14, repeat: -1
+          });
+        }
+        if (!this.anims.exists('player_jump_anim')) {
+          this.anims.create({ key: 'player_jump_anim', frames: [{ key: 'player_jump' }], frameRate: 1 });
+        }
+        this.scene.start('GameScene');
+      }
+    }
+
+    class GameScene extends Phaser.Scene {
+      constructor() { super({ key: 'GameScene' }); }
+
+      create() {
+        const { CANVAS_WIDTH, CANVAS_HEIGHT, WORLD_HEIGHT, PLAYER, SCORING } = GAME_CONFIG;
+        
+        this.score = 0;
+        this.distanceMeters = 0;
+        this.treesBloomed = 0;
+        this.saplingsCollected = 0;
+        this.combo = 1;
+        this.lastCollectTime = 0;
+        this.isMatchLocked = false;
+        this.canDoubleJump = false;
+        this.coyoteCounter = 0;
+        this.jumpBufferCounter = 0;
+        this.isInvulnerable = false;
+        this.currentSpeed = PLAYER.BASE_SPEED;
+        
+        this.matchDuration = SCORING.MATCH_DURATION_SECONDS;
+        this.timeRemaining = this.matchDuration;
+
+        this.nextChunkX = 0;
+        this.CHUNK_WIDTH = 1200;
+
+        // Parallax Backdrop
+        this.bgSky = this.add.rectangle(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT, 0x041610).setOrigin(0, 0).setScrollFactor(0);
+        this.bgMountains = this.add.tileSprite(0, CANVAS_HEIGHT - 380, CANVAS_WIDTH, 400, 'bg_mountains').setOrigin(0, 0).setScrollFactor(0);
+        this.bgSilhouettes = this.add.tileSprite(0, CANVAS_HEIGHT - 280, CANVAS_WIDTH, 300, 'bg_forest_silhouettes').setOrigin(0, 0).setScrollFactor(0);
+
+        // Object Groups
+        this.platforms = this.physics.add.staticGroup();
+        this.saplings = this.physics.add.group();
+        this.trees = this.physics.add.group();
+        this.hazards = this.physics.add.group();
+        this.movingHazards = [];
+
+        // Dynamic Ghost Rivals Rendering
+        this.ghostSprites = [];
+        for (let g = 0; g < 12; g++) {
+          const ghost = this.add.sprite(-200, -200, 'player_ghost').setAlpha(0.65);
+          this.ghostSprites.push(ghost);
+        }
+
+        // Particle Emitters
+        try {
+          this.leafEmitter = this.add.particles(0, 0, 'particle_leaf', { speed: { min: 90, max: 240 }, angle: { min: 190, max: 350 }, scale: { start: 1.4, end: 0.2 }, alpha: { start: 1, end: 0 }, lifespan: 750, gravityY: 160, emitting: false });
+          this.waterEmitter = this.add.particles(0, 0, 'particle_water', { speed: { min: 120, max: 280 }, angle: { min: 240, max: 300 }, scale: { start: 1.5, end: 0.3 }, alpha: { start: 1, end: 0 }, lifespan: 850, gravityY: 320, emitting: false });
+          this.smokeEmitter = this.add.particles(0, 0, 'particle_smoke', { speed: { min: 25, max: 70 }, angle: { min: 250, max: 290 }, scale: { start: 0.7, end: 2.0 }, alpha: { start: 0.75, end: 0 }, lifespan: 650, emitting: false });
+          this.sparkleEmitter = this.add.particles(0, 0, 'particle_sparkle', { speed: { min: 60, max: 180 }, scale: { start: 1.3, end: 0 }, lifespan: 550, emitting: false });
+        } catch (e) {}
+
+        // Player Avatar
+        this.player = this.physics.add.sprite(180, WORLD_HEIGHT - 140, 'player_idle');
+        this.player.body.setGravityY(PLAYER.GRAVITY_Y);
+        this.player.body.setSize(32, 58);
+        this.player.body.setOffset(10, 6);
+        this.player.body.setMaxVelocity(PLAYER.MAX_SPEED, PLAYER.MAX_FALL_SPEED);
+
+        // Dynamic Camera
+        this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
+        this.cameras.main.setDeadzone(120, 80);
+
+        // Collisions
+        this.physics.add.collider(this.player, this.platforms, () => {
+          this.coyoteCounter = PLAYER.COYOTE_TIME_MS;
+          this.canDoubleJump = true;
+        });
+
+        this.physics.add.overlap(this.player, this.saplings, (p, s) => { if (!this.isMatchLocked) this.collectSapling(s); });
+        this.physics.add.overlap(this.player, this.trees, (p, t) => { if (!this.isMatchLocked) this.waterTree(t); });
+        this.physics.add.overlap(this.player, this.hazards, (p, h) => { if (!this.isMatchLocked) this.hitHazard(h); });
+
+        // Key Inputs
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+        this.keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+        this.keyW = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+        this.keyS = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
+        this.keySpace = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+        // Spawn Initial 4 Chunks
+        for (let i = 0; i < 4; i++) this.spawnNextChunk();
+
+        this.updateHUD();
+      }
+
+      /* PROCEDURAL 30-PLAYER TOURNAMENT CHUNKS */
+      spawnNextChunk() {
+        const startX = this.nextChunkX;
+        const endX = startX + this.CHUNK_WIDTH;
+        const groundY = GAME_CONFIG.WORLD_HEIGHT - 32;
+        const difficulty = Math.min(3.0, 1 + (startX / 6000));
+
+        const chunkType = Math.floor(Math.random() * 4);
+
+        // 1. Ground with Traps & Chasms
+        for (let gx = startX; gx < endX; gx += 64) {
+          if (chunkType === 1 && gx > startX + 360 && gx < startX + 640) continue; // Chasms
+          this.platforms.create(gx + 32, groundY, 'tile_ground');
+        }
+
+        // 2. High-Speed Acrobatic Platforms
+        if (chunkType === 3 || Math.random() < 0.8) {
+          this.platforms.create(startX + 260, groundY - 150, 'tile_platform');
+          this.platforms.create(startX + 680, groundY - 260, 'tile_platform');
+          this.platforms.create(startX + 1000, groundY - 170, 'tile_platform');
+        }
+
+        // 3. Dense Sapling Arcs
+        const saplingCount = Phaser.Math.Between(5, 8);
+        for (let s = 0; s < saplingCount; s++) {
+          const sx = startX + 120 + s * 130;
+          const sy = groundY - Phaser.Math.Between(60, 300);
+          const sapling = this.saplings.create(sx, sy, 'sapling');
+          if (sapling && sapling.body) {
+            sapling.body.setAllowGravity(false);
+            this.tweens.add({ targets: sapling, y: sy - 12, duration: 900 + Phaser.Math.Between(0, 300), yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+          }
+        }
+
+        // 4. Miyawaki Tree Sites
+        const treeCount = Phaser.Math.Between(1, 3);
+        for (let t = 0; t < treeCount; t++) {
+          const tx = startX + 280 + t * 380;
+          const tree = this.trees.create(tx, groundY - 44, 'tree_dry');
+          if (tree && tree.body) {
+            tree.body.setAllowGravity(false);
+            tree.body.setImmovable(true);
+            tree.isBloomed = false;
+          }
+        }
+
+        // 5. Heavy Hazardous Hurdles (Bulldozers, Laser Saws, Sludge Barrels)
+        if (chunkType === 0 || chunkType === 1 || Math.random() < 0.7) {
+          const dozer = this.hazards.create(startX + 420, groundY - 44, 'bulldozer');
+          if (dozer && dozer.body) {
+            dozer.body.setAllowGravity(false);
+            dozer.body.setImmovable(true);
+            dozer.body.setSize(95, 52);
+            dozer.body.setOffset(10, 15);
+            dozer.hazardType = 'bulldozer';
+            dozer.speed = (140 + Math.random() * 60) * difficulty;
+            dozer.direction = 1;
+            dozer.minX = startX + 180;
+            dozer.maxX = endX - 120;
+            this.movingHazards.push(dozer);
+          }
+        }
+
+        if (chunkType === 2 || Math.random() < 0.7) {
+          const saw = this.hazards.create(startX + 640, groundY - 200, 'saw_blade');
+          if (saw && saw.body) {
+            saw.body.setAllowGravity(false);
+            saw.body.setImmovable(true);
+            saw.hazardType = 'saw';
+            this.tweens.add({ targets: saw, angle: 360, duration: 600, repeat: -1 });
+          }
+        }
+
+        if (Math.random() < 0.6) {
+          const barrel = this.hazards.create(startX + 860, groundY - 36, 'toxic_barrel');
+          if (barrel && barrel.body) {
+            barrel.body.setAllowGravity(false);
+            barrel.body.setImmovable(true);
+            barrel.hazardType = 'toxic';
+          }
+        }
+
+        this.nextChunkX += this.CHUNK_WIDTH;
+      }
+
+      cleanupOldChunks() {
+        const cleanupThreshold = this.player.x - 1600;
+        [this.platforms, this.saplings, this.trees, this.hazards].forEach(group => {
+          group.getChildren().forEach(child => {
+            if (child.x < cleanupThreshold) child.destroy();
+          });
+        });
+        this.movingHazards = this.movingHazards.filter(h => h.active);
+      }
+
+      emitSafeParticles(emitter, x, y, count = 10) {
+        if (!emitter) return;
+        try {
+          if (typeof emitter.explode === 'function') emitter.explode(count, x, y);
+          else if (typeof emitter.emitParticleAt === 'function') emitter.emitParticleAt(x, y, count);
+        } catch (e) {}
+      }
+
+      update(time, delta) {
+        const deltaSec = delta / 1000;
+
+        this.bgMountains.tilePositionX = this.cameras.main.scrollX * 0.2;
+        this.bgSilhouettes.tilePositionX = this.cameras.main.scrollX * 0.5;
+
+        if (this.player.x > this.nextChunkX - 2800) {
+          this.spawnNextChunk();
+          this.cleanupOldChunks();
+        }
+
+        this.updateMatchTimer(deltaSec);
+        this.updateHazards();
+
+        if (this.isMatchLocked) {
+          if (this.player && this.player.body) {
+            this.player.setVelocity(0, 0);
+            this.player.anims.play('player_idle_anim', true);
+          }
+          return;
+        }
+
+        this.handlePlayerMovement(delta);
+
+        // Combo Decay
+        if (Date.now() - this.lastCollectTime > GAME_CONFIG.SCORING.COMBO_TIMEOUT_MS) {
+          this.combo = 1;
+          const comboBadge = document.getElementById('hud-combo-badge');
+          if (comboBadge) comboBadge.classList.add('hidden');
+        }
+
+        // Distance Tracker
+        this.distanceMeters = Math.max(this.distanceMeters, Math.floor(this.player.x / 35));
+
+        // Respawn Recovery
+        if (this.player.y > GAME_CONFIG.WORLD_HEIGHT + 100) {
+          this.player.setPosition(this.player.x + 100, GAME_CONFIG.WORLD_HEIGHT - 240);
+          this.player.setVelocity(0, -320);
+          this.score = Math.max(0, this.score - 60);
+          this.updateHUD();
+          this.showPointPopup(this.player.x, this.player.y, '-60 Chasm Drop! 🕳️', '#ff3366');
+        }
+
+        // 30-Player Simulation & Ghost Rendering
+        networkManager.updateSimulatedBots(deltaSec);
+        this.renderGhostRivals();
+
+        if (this.player && this.player.anims) {
+          const animKey = this.player.anims.currentAnim ? this.player.anims.currentAnim.key : 'idle';
+          networkManager.updateLocalScore(this.score, this.distanceMeters, this.treesBloomed, this.player.x, this.player.y, animKey, this.player.flipX);
+        }
+      }
+
+      handlePlayerMovement(delta) {
+        if (!this.player || !this.player.body) return;
+
+        const { BASE_SPEED, MAX_SPEED, JUMP_VELOCITY, DOUBLE_JUMP_VELOCITY, FAST_FALL_VELOCITY } = GAME_CONFIG.PLAYER;
+        const isGrounded = this.player.body.blocked.down || this.player.body.touching.down;
+
+        // Hyper-Speed scaling with distance!
+        this.currentSpeed = Math.min(MAX_SPEED, BASE_SPEED + (this.distanceMeters * 0.5));
+        const speedVal = document.getElementById('hud-speed-val');
+        if (speedVal) speedVal.textContent = Math.round(this.currentSpeed);
+
+        if (isGrounded) {
+          this.coyoteCounter = GAME_CONFIG.PLAYER.COYOTE_TIME_MS;
+          this.canDoubleJump = true;
+        } else {
+          this.coyoteCounter -= delta;
+        }
+
+        const leftPressed = this.cursors.left.isDown || this.keyA.isDown;
+        const rightPressed = this.cursors.right.isDown || this.keyD.isDown;
+        const downPressed = this.cursors.down.isDown || this.keyS.isDown;
+
+        if (!this.isInvulnerable) {
+          if (leftPressed) {
+            this.player.setVelocityX(-this.currentSpeed * 0.85);
+            this.player.setFlipX(true);
+            if (isGrounded) this.player.anims.play('player_run_anim', true);
+          } else if (rightPressed) {
+            this.player.setVelocityX(this.currentSpeed);
+            this.player.setFlipX(false);
+            if (isGrounded) this.player.anims.play('player_run_anim', true);
+          } else {
+            // Forward Momentum
+            this.player.setVelocityX(this.currentSpeed * 0.75);
+            this.player.setFlipX(false);
+            if (isGrounded) this.player.anims.play('player_run_anim', true);
+          }
+        }
+
+        // Fast-Fall Dive Mechanic!
+        if (downPressed && !isGrounded) {
+          this.player.setVelocityY(FAST_FALL_VELOCITY);
+        }
+
+        // Jump Controls
+        const jumpJustPressed = Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
+          Phaser.Input.Keyboard.JustDown(this.keyW) ||
+          Phaser.Input.Keyboard.JustDown(this.keySpace);
+
+        if (jumpJustPressed) this.jumpBufferCounter = GAME_CONFIG.PLAYER.JUMP_BUFFER_MS;
+        else this.jumpBufferCounter -= delta;
+
+        if (this.jumpBufferCounter > 0) {
+          if (this.coyoteCounter > 0) {
+            this.player.setVelocityY(JUMP_VELOCITY);
+            this.coyoteCounter = 0;
+            this.jumpBufferCounter = 0;
+            this.player.anims.play('player_jump_anim', true);
+            soundCtrl.playJump();
+          } else if (this.canDoubleJump) {
+            this.player.setVelocityY(DOUBLE_JUMP_VELOCITY);
+            this.canDoubleJump = false;
+            this.jumpBufferCounter = 0;
+            this.player.anims.play('player_jump_anim', true);
+            soundCtrl.playDoubleJump();
+            this.emitSafeParticles(this.leafEmitter, this.player.x, this.player.y + 22, 14);
+          }
+        }
+
+        if (!isGrounded) this.player.anims.play('player_jump_anim', true);
+      }
+
+      collectSapling(sapling) {
+        const x = sapling.x, y = sapling.y;
+        this.emitSafeParticles(this.leafEmitter, x, y, 20);
+        this.emitSafeParticles(this.sparkleEmitter, x, y, 12);
+        sapling.destroy();
+
+        this.lastCollectTime = Date.now();
+        this.combo = Math.min(4, this.combo + 1);
+
+        const earnedPoints = GAME_CONFIG.SCORING.SAPLING_POINTS * this.combo;
+        this.score += earnedPoints;
+        this.saplingsCollected += 1;
+
+        soundCtrl.playSaplingCollect(this.combo);
+        this.showPointPopup(x, y, `+${earnedPoints} (${this.combo}x Combo!) 🌱`, '#10f09a');
+        this.updateHUD();
+      }
+
+      waterTree(tree) {
+        if (tree.isBloomed) return;
+        tree.isBloomed = true;
+        tree.setTexture('tree_bloomed');
+        tree.setY(tree.y - 35);
+
+        this.emitSafeParticles(this.waterEmitter, tree.x, tree.y + 30, 28);
+        this.emitSafeParticles(this.leafEmitter, tree.x, tree.y, 40);
+        this.emitSafeParticles(this.sparkleEmitter, tree.x, tree.y - 20, 30);
+
+        tree.setScale(0.3);
+        this.tweens.add({ targets: tree, scaleX: 1, scaleY: 1, duration: 550, ease: 'Back.easeOut' });
+
+        const earnedPoints = GAME_CONFIG.SCORING.TREE_WATER_POINTS * this.combo;
+        this.score += earnedPoints;
+        this.treesBloomed += 1;
+
+        soundCtrl.playWaterTree();
+        this.showPointPopup(tree.x, tree.y - 45, `+${earnedPoints} Master Canopy! 🌳`, '#fbbf24');
+        this.updateHUD();
+      }
+
+      hitHazard(hazard) {
+        if (this.isInvulnerable) return;
+        this.isInvulnerable = true;
+
+        const penalty = hazard.hazardType === 'saw' ? GAME_CONFIG.SCORING.SAW_PENALTY :
+          (hazard.hazardType === 'toxic' ? GAME_CONFIG.SCORING.TOXIC_PENALTY : GAME_CONFIG.SCORING.BULLDOZER_PENALTY);
+
+        this.score = Math.max(0, this.score - penalty);
+        this.combo = 1;
+        this.updateHUD();
+
+        const knockDir = this.player.x < hazard.x ? -1 : 1;
+        this.player.setVelocity(knockDir * GAME_CONFIG.PLAYER.KNOCKBACK_FORCE_X, GAME_CONFIG.PLAYER.KNOCKBACK_FORCE_Y);
+
+        soundCtrl.playHazardHit();
+        this.cameras.main.shake(280, 0.024);
+
+        const flash = document.getElementById('flash-overlay');
+        if (flash) {
+          flash.classList.add('active');
+          setTimeout(() => flash.classList.remove('active'), 180);
+        }
+
+        this.showPointPopup(this.player.x, this.player.y - 30, `-${penalty} Damage! 🚜`, '#ff3366');
+
+        this.tweens.add({
+          targets: this.player, alpha: 0.25, duration: 100, yoyo: true, repeat: 7,
+          onComplete: () => {
+            if (this.player) this.player.setAlpha(1);
+            this.isInvulnerable = false;
+          }
+        });
+      }
+
+      updateHazards() {
+        this.movingHazards.forEach(dozer => {
+          if (!dozer.active) return;
+          dozer.x += dozer.speed * dozer.direction * (1 / 60);
+          const stackX = dozer.direction === 1 ? dozer.x - 4 : dozer.x + 4;
+          this.emitSafeParticles(this.smokeEmitter, stackX, dozer.y - 28, 1);
+          if (dozer.x >= dozer.maxX) { dozer.direction = -1; dozer.setFlipX(true); }
+          else if (dozer.x <= dozer.minX) { dozer.direction = 1; dozer.setFlipX(false); }
+        });
+      }
+
+      renderGhostRivals() {
+        const bots = networkManager.simulatedBots;
+        this.ghostSprites.forEach((sprite, idx) => {
+          if (bots[idx]) {
+            const b = bots[idx];
+            sprite.setPosition(b.x, GAME_CONFIG.WORLD_HEIGHT - 90);
+            sprite.setVisible(Math.abs(b.x - this.player.x) < 1400);
+          } else {
+            sprite.setVisible(false);
+          }
+        });
+      }
+
+      updateMatchTimer(deltaSec) {
+        if (this.isMatchLocked) return;
+        this.timeRemaining -= deltaSec;
+        const timerDisplay = document.getElementById('timer-display');
+        const timerFill = document.getElementById('timer-progress-fill');
+
+        if (this.timeRemaining <= 0) {
+          this.timeRemaining = 0;
+          this.lockMatchAndConclude();
+        }
+
+        const mins = Math.floor(this.timeRemaining / 60);
+        const secs = Math.floor(this.timeRemaining % 60);
+        const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+        if (timerDisplay) {
+          timerDisplay.textContent = formatted;
+          if (this.timeRemaining <= 30) timerDisplay.classList.add('warning');
+          else timerDisplay.classList.remove('warning');
+        }
+
+        if (timerFill) {
+          const pct = (this.timeRemaining / this.matchDuration) * 100;
+          timerFill.style.width = `${pct}%`;
+        }
+      }
+
+      lockMatchAndConclude() {
+        this.isMatchLocked = true;
+        if (this.player && this.player.body) {
+          this.player.setVelocity(0, 0);
+          this.player.body.setAllowGravity(false);
+          this.player.anims.play('player_idle_anim', true);
+        }
+
+        try {
+          localStorage.setItem(GAME_CONFIG.STORAGE_KEYS.SESSION_LOCK, 'true');
+          localStorage.setItem(GAME_CONFIG.STORAGE_KEYS.HIGH_SCORE, String(this.score));
+        } catch (e) {}
+
+        soundCtrl.playGameOver();
+        if (typeof confetti === 'function') {
+          confetti({ particleCount: 180, spread: 100, origin: { y: 0.6 } });
+        }
+
+        const modal = document.getElementById('gameover-modal');
+        if (!modal) return;
+
+        document.getElementById('final-stat-score').textContent = this.score;
+        document.getElementById('final-stat-dist').textContent = `${this.distanceMeters}m`;
+        document.getElementById('final-stat-trees').textContent = this.treesBloomed;
+
+        const ranked = networkManager.getRankedPlayers();
+        const myRankIdx = ranked.findIndex(p => p.id === networkManager.myId);
+        const myRank = myRankIdx >= 0 ? `#${myRankIdx + 1}/30` : '#1/30';
+        document.getElementById('final-stat-rank').textContent = myRank;
+
+        const tbody = document.getElementById('final-podium-rows');
+        if (tbody) {
+          tbody.innerHTML = '';
+          ranked.forEach((p, idx) => {
+            const isUser = (p.id === networkManager.myId);
+            const tr = document.createElement('tr');
+            if (idx === 0) tr.classList.add('is-winner');
+            if (isUser) tr.classList.add('is-user');
+            const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
+            const tier = idx < 3 ? '👑 Grand Master' : (idx < 10 ? '💎 Diamond' : (idx < 20 ? '🥇 Platinum' : '🥈 Challenger'));
+            tr.innerHTML = `
+              <td><strong>${medal}</strong></td>
+              <td>${isUser ? '🌱 ' + p.name + ' (You)' : p.name}</td>
+              <td>🏃 ${p.distance || 0}m</td>
+              <td>🌳 ${p.treesBloomed || 0}</td>
+              <td style="font-family: 'Press Start 2P'; color: #10f09a;">${p.score}</td>
+              <td><span class="player-chip">${tier}</span></td>
+            `;
+            tbody.appendChild(tr);
+          });
+        }
+        modal.classList.remove('hidden');
+      }
+
+      showPointPopup(x, y, text, color) {
+        const popup = this.add.text(x, y, text, {
+          fontFamily: 'Space Grotesk', fontSize: '16px', fontWeight: '900', color: color || '#ffffff', stroke: '#000000', strokeThickness: 4
+        }).setOrigin(0.5);
+        this.tweens.add({ targets: popup, y: y - 50, alpha: 0, duration: 1000, ease: 'Cubic.easeOut', onComplete: () => popup.destroy() });
+      }
+
+      updateHUD() {
+        const scoreVal = document.getElementById('hud-score-val');
+        if (scoreVal) scoreVal.textContent = this.score;
+
+        const comboBadge = document.getElementById('hud-combo-badge');
+        if (comboBadge) {
+          if (this.combo > 1) {
+            comboBadge.textContent = `${this.combo}x COMBO!`;
+            comboBadge.classList.remove('hidden');
+          } else {
+            comboBadge.classList.add('hidden');
+          }
+        }
+
+        const ranked = networkManager.getRankedPlayers();
+        const myRankIdx = ranked.findIndex(p => p.id === networkManager.myId);
+        const rankBadge = document.getElementById('hud-rank-badge');
+        if (rankBadge) {
+          rankBadge.textContent = `RANK #${myRankIdx >= 0 ? myRankIdx + 1 : 1}/30`;
+        }
+      }
+    }
+
+    const phaserConfig = {
+      type: Phaser.AUTO,
+      parent: 'phaser-container',
+      width: GAME_CONFIG.CANVAS_WIDTH,
+      height: GAME_CONFIG.CANVAS_HEIGHT,
+      physics: { default: 'arcade', arcade: { gravity: { y: 0 }, debug: false } },
+      scene: [BootScene, GameScene]
+    };
+
+    let gameInstance = null;
+
+    function launchGameSession() {
+      document.getElementById('lobby-screen').classList.add('hidden');
+      document.getElementById('game-hud').classList.remove('hidden');
+
+      if (!gameInstance) {
+        gameInstance = new Phaser.Game(phaserConfig);
+      } else {
+        gameInstance.scene.stop('GameScene');
+        gameInstance.scene.start('GameScene');
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      try {
+        const isLocked = localStorage.getItem(GAME_CONFIG.STORAGE_KEYS.SESSION_LOCK);
+        const banner = document.getElementById('session-lock-banner');
+        if (isLocked === 'true' && banner) banner.classList.remove('hidden');
+      } catch (e) {}
+
+      const nameInput = document.getElementById('player-name-input');
+      const btnHost = document.getElementById('btn-host-room');
+      const btnJoin = document.getElementById('btn-join-room');
+      const joinCodeInput = document.getElementById('join-code-input');
+      const btnSolo = document.getElementById('btn-solo-play');
+      const btnStartMatch = document.getElementById('btn-start-match');
+      const roomStatusArea = document.getElementById('room-status-area');
+      const displayRoomCode = document.getElementById('display-room-code');
+      const btnUnlockReplay = document.getElementById('btn-unlock-replay');
+      const btnReturnLobby = document.getElementById('btn-return-lobby');
+      const btnResetSession = document.getElementById('btn-reset-session');
+
+      networkManager.onStateChange((ranked) => {
+        const list = document.getElementById('live-leaderboard-list');
+        if (list && Array.isArray(ranked)) {
+          list.innerHTML = '';
+          ranked.slice(0, 10).forEach((p, idx) => {
+            const isMe = (p.id === networkManager.myId);
+            const li = document.createElement('li');
+            li.className = `leaderboard-row ${isMe ? 'is-me' : ''}`;
+            const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
+            li.innerHTML = `
+              <span class="rank-badge">${medal}</span>
+              <span class="row-name">${isMe ? p.name + ' (You)' : p.name}</span>
+              <span class="row-score">${p.score}</span>
+            `;
+            list.appendChild(li);
+          });
+        }
+      });
+
+      if (btnHost) {
+        btnHost.addEventListener('click', () => {
+          const name = (nameInput ? nameInput.value.trim() : '') || 'HostBlitz';
+          const hudName = document.getElementById('hud-player-name');
+          if (hudName) hudName.textContent = name;
+          networkManager.hostRoom(name, (code) => {
+            if (displayRoomCode) displayRoomCode.textContent = code;
+            if (roomStatusArea) roomStatusArea.classList.remove('hidden');
+          });
+        });
+      }
+
+      if (btnJoin) {
+        btnJoin.addEventListener('click', () => {
+          const name = (nameInput ? nameInput.value.trim() : '') || 'GuestBlitz';
+          const code = joinCodeInput ? joinCodeInput.value.trim() : '';
+          if (code.length !== 4) { alert('Please enter a valid 4-letter room code.'); return; }
+          const hudName = document.getElementById('hud-player-name');
+          if (hudName) hudName.textContent = name;
+          networkManager.joinRoom(code, name, (roomCode) => {
+            if (displayRoomCode) displayRoomCode.textContent = roomCode;
+            if (roomStatusArea) roomStatusArea.classList.remove('hidden');
+            const statusMsg = document.getElementById('room-status-msg');
+            if (statusMsg) statusMsg.textContent = 'Joined 30-Player Lobby! Waiting for host...';
+            if (btnStartMatch) btnStartMatch.style.display = 'none';
+          }, () => { alert('Could not connect to room ' + code + '. Please check code.'); });
+        });
+      }
+
+      if (btnStartMatch) {
+        btnStartMatch.addEventListener('click', () => {
+          networkManager.broadcast({ type: 'START_MATCH' });
+          launchGameSession();
+        });
+      }
+
+      networkManager.onGameStartCallback = () => launchGameSession();
+
+      if (btnSolo) {
+        btnSolo.addEventListener('click', () => {
+          const name = (nameInput ? nameInput.value.trim() : '') || 'EcoBlitz';
+          const hudName = document.getElementById('hud-player-name');
+          if (hudName) hudName.textContent = name;
+          networkManager.startSolo(name);
+          launchGameSession();
+        });
+      }
+
+      if (btnUnlockReplay) {
+        btnUnlockReplay.addEventListener('click', () => {
+          try { localStorage.removeItem(GAME_CONFIG.STORAGE_KEYS.SESSION_LOCK); } catch (e) {}
+          location.reload();
+        });
+      }
+
+      if (btnResetSession) {
+        btnResetSession.addEventListener('click', () => {
+          try { localStorage.removeItem(GAME_CONFIG.STORAGE_KEYS.SESSION_LOCK); } catch (e) {}
+          location.reload();
+        });
+      }
+
+      if (btnReturnLobby) {
+        btnReturnLobby.addEventListener('click', () => location.reload());
+      }
+    });
+  </script>
+</body>
+</html>
